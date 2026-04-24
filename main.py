@@ -4,7 +4,9 @@ Loads all plugins and starts bot + userbot + PyTgCalls
 """
 import asyncio
 import importlib
+import os
 
+from aiohttp import web
 from pyrogram import idle
 
 from MusicBot import app, userbot, call_py, LOGGER
@@ -18,6 +20,38 @@ PLUGINS = [
     "MusicBot.plugins.bot.start",
     "MusicBot.core.call",
 ]
+
+
+async def _start_health_server():
+    """
+    Start a tiny HTTP server for platforms that require a bound PORT
+    (e.g., Azure App Service / Railway Web Service).
+    """
+    try:
+        port = int(os.environ.get("PORT", "0") or 0)
+    except ValueError:
+        LOGGER.warning("Invalid PORT value; skipping health server startup.")
+        return None
+    if not port:
+        return None
+
+    web_app = web.Application()
+
+    async def root(_request):
+        return web.json_response({"status": "ok", "service": config.MUSIC_BOT_NAME})
+
+    async def healthz(_request):
+        return web.Response(text="ok")
+
+    web_app.router.add_get("/", root)
+    web_app.router.add_get("/healthz", healthz)
+
+    runner = web.AppRunner(web_app)
+    await runner.setup()
+    site = web.TCPSite(runner, host="0.0.0.0", port=port)
+    await site.start()
+    LOGGER.info(f"✅ Health server started on 0.0.0.0:{port}")
+    return runner
 
 
 async def main():
@@ -50,33 +84,49 @@ async def main():
         except Exception as e:
             LOGGER.error(f"  ❌ {plugin}: {e}")
 
-    # Start clients
-    await userbot.start()
-    LOGGER.info("✅ Userbot started")
-
-    await app.start()
-    me = await app.get_me()
-    LOGGER.info(f"✅ Bot started: @{me.username}")
-
-    await call_py.start()
-    LOGGER.info("✅ PyTgCalls started")
-
-    # Notify owner
+    web_runner = None
+    userbot_started = False
+    app_started = False
+    call_started = False
     try:
-        await app.send_message(
-            config.LOG_GROUP_ID or config.OWNER_ID,
-            f"✅ **{config.MUSIC_BOT_NAME}** started successfully!\n"
-            f"👤 Bot: @{me.username}"
-        )
-    except Exception:
-        pass
+        # Start clients
+        web_runner = await _start_health_server()
 
-    LOGGER.info("🚀 Bot is running!")
-    await idle()
+        await userbot.start()
+        userbot_started = True
+        LOGGER.info("✅ Userbot started")
 
-    # Cleanup
-    await app.stop()
-    await userbot.stop()
+        await app.start()
+        app_started = True
+        me = await app.get_me()
+        LOGGER.info(f"✅ Bot started: @{me.username}")
+
+        await call_py.start()
+        call_started = True
+        LOGGER.info("✅ PyTgCalls started")
+
+        # Notify owner
+        try:
+            await app.send_message(
+                config.LOG_GROUP_ID or config.OWNER_ID,
+                f"✅ **{config.MUSIC_BOT_NAME}** started successfully!\n"
+                f"👤 Bot: @{me.username}"
+            )
+        except Exception:
+            pass
+
+        LOGGER.info("🚀 Bot is running!")
+        await idle()
+    finally:
+        # Cleanup
+        if call_started:
+            await call_py.stop()
+        if app_started:
+            await app.stop()
+        if userbot_started:
+            await userbot.stop()
+        if web_runner:
+            await web_runner.cleanup()
 
 
 if __name__ == "__main__":

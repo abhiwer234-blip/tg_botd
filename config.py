@@ -1,6 +1,10 @@
 import os
 from dotenv import load_dotenv
 
+# Load env vars in priority order:
+# 1) .env (local development default)
+# 2) sample.env (legacy name used by older guides)
+load_dotenv(".env")
 load_dotenv("sample.env")
 
 def _int(key, default=0):

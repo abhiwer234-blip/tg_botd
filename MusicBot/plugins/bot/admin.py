@@ -3,13 +3,21 @@ Admin Plugin — ban/unban/kick/mute/unmute/warn/promote/demote/pin/info/gban
 """
 from pyrogram import Client, filters
 from pyrogram.types import Message, ChatPermissions, ChatPrivileges
-from pyrogram.errors import UserAdminInvalid
 
 from MusicBot import app
 from MusicBot.utils.database import db
 import config
 
 MAX_WARNS = 3
+
+
+def is_anonymous_admin(message: Message) -> bool:
+    """True when message is sent as the group itself (anonymous admin mode)."""
+    return bool(
+        message.sender_chat
+        and message.chat
+        and message.sender_chat.id == message.chat.id
+    )
 
 
 # ── Admin check ───────────────────────────────────────────────
@@ -23,6 +31,10 @@ async def is_admin(client, chat_id, user_id) -> bool:
 
 def admin_cmd(func):
     async def wrapper(client: Client, message: Message):
+        if not message.from_user:
+            if is_anonymous_admin(message):
+                return await func(client, message)
+            return await message.reply("🚫 **Could not identify the sender for this action.**")
         if not await is_admin(client, message.chat.id, message.from_user.id):
             return await message.reply("🚫 **Admins only.**")
         await func(client, message)
@@ -300,10 +312,25 @@ async def anti_links(client, message):
     setting = await db.get_setting(message.chat.id, "anti_links", False)
     if not setting:
         return
+
+    text = message.text or ""
+    has_link = any(p in text for p in ["t.me/", "http://", "https://", "www."])
+
+    if not message.from_user:
+        # Anonymous admins should not be moderated.
+        if is_anonymous_admin(message):
+            return
+        # Channel/unknown senders should still be moderated.
+        if has_link:
+            try:
+                await message.delete()
+            except Exception:
+                pass
+        return
+
     if await is_admin(client, message.chat.id, message.from_user.id):
         return
-    text = message.text or ""
-    if any(p in text for p in ["t.me/", "http://", "https://", "www."]):
+    if has_link:
         try:
             await message.delete()
             await client.send_message(

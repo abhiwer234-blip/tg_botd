@@ -81,7 +81,13 @@
 
 ## ⚙️ Required Variables
 
-Create a `sample.env` file or set these as environment variables:
+Copy `sample.env.example` to `.env` (recommended) or `sample.env`, then set these variables:
+
+```bash
+cp sample.env.example .env
+```
+
+The bot loads `.env` first and falls back to `sample.env`.
 
 ```env
 # ── Required ──────────────────────────────
@@ -204,11 +210,39 @@ Go to **Settings** → **Deploy** → Set:
 python main.py
 ```
 
+> 💡 This repo includes `railway.json` and a built-in health endpoint (`/healthz`) for Railway Web Services.
+
 **Step 5 — Deploy**
 Railway auto-deploys on every push to main! ✅
 
 > 💡 Add a MongoDB service directly in Railway:
 > New → Database → MongoDB → Copy the connection URL
+
+---
+
+### ☁️ Deploy on Azure App Service
+
+**Step 1 — Create Web App**
+1. Open [Azure Portal](https://portal.azure.com)
+2. Create **App Service** (Python 3.11)
+3. Connect your GitHub repo
+
+**Step 2 — Startup Command**
+Set startup command to:
+```bash
+python main.py
+```
+
+**Step 3 — Configure Environment Variables**
+In **App Service → Environment variables**, add all required bot variables.
+
+**Step 4 — Health Check (recommended)**
+Set Health check path to:
+```text
+/healthz
+```
+
+> ✅ On Azure/Railway, `PORT` is set automatically. Bot now starts a small HTTP health server on that port so deployment health checks pass.
 
 ---
 
@@ -238,11 +272,12 @@ cd tg_botd
 pip3 install -r requirements.txt
 ```
 
-**Step 5 — Create .env file**
+**Step 5 — Create env file**
 ```bash
-nano sample.env
+cp sample.env.example .env
+nano .env
 ```
-Paste all your variables, save with `Ctrl+X → Y → Enter`
+Paste/update your variables, save with `Ctrl+X → Y → Enter`
 
 **Step 6 — Run with screen (stays running after disconnect)**
 ```bash
@@ -319,7 +354,7 @@ cd tg_botd
 pip3 install -r requirements.txt
 
 # Create env file
-cp sample.env .env
+cp sample.env.example .env
 # Edit .env with your values
 
 # Run bot
